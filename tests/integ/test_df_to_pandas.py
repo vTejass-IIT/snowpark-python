@@ -165,3 +165,17 @@ def test_to_pandas_batches(session):
     for df_batch in df.to_pandas_batches():
         assert_frame_equal(df_batch, entire_pandas_df.iloc[: len(df_batch)])
         break
+
+def test_to_pandas_batches_with_batch_size(session):
+    df = session.range(100000).cache_result()
+    batch_size = 1000
+    # Test with specified batch size
+    iterator_with_batch_size = df.to_pandas_batches(batch_size=batch_size)
+    assert isinstance(iterator_with_batch_size, Iterator)
+
+    for df_batch in iterator_with_batch_size:
+        assert len(df_batch) <= batch_size
+
+    # Ensure the sum of batch sizes equals the entire dataset size
+    sum_batch_sizes = sum(len(batch) for batch in df.to_pandas_batches(batch_size=batch_size))
+    assert sum_batch_sizes == len(df)

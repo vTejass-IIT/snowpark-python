@@ -797,6 +797,7 @@ class DataFrame:
             *,
             statement_params: Optional[Dict[str, str]] = None,
             block: bool = True,
+            batch_size: Optional[int] = None,
             **kwargs: Dict[str, Any],
         ) -> Iterator[pandas.DataFrame]:
             ...  # pragma: no cover
@@ -807,6 +808,7 @@ class DataFrame:
         *,
         statement_params: Optional[Dict[str, str]] = None,
         block: bool = False,
+        batch_size: Optional[int] = None,
         **kwargs: Dict[str, Any],
     ) -> AsyncJob:
         ...  # pragma: no cover
@@ -817,6 +819,7 @@ class DataFrame:
         *,
         statement_params: Optional[Dict[str, str]] = None,
         block: bool = True,
+        batch_size: Optional[int] = None,
         **kwargs: Dict[str, Any],
     ) -> Union[Iterator["pandas.DataFrame"], AsyncJob]:
         """
@@ -841,6 +844,7 @@ class DataFrame:
             block: A bool value indicating whether this function will wait until the result is available.
                 When it is ``False``, this function executes the underlying queries of the dataframe
                 asynchronously and returns an :class:`AsyncJob`.
+            batch_size: Size of each batch for retrieving results.
 
         Note:
             1. This method is only available if Pandas is installed and available.
@@ -848,7 +852,7 @@ class DataFrame:
             2. If you use :func:`Session.sql` with this method, the input query of
             :func:`Session.sql` can only be a SELECT statement.
         """
-        return self._session._conn.execute(
+        result = self._session._conn.execute(
             self._plan,
             to_pandas=True,
             to_iter=True,
@@ -861,6 +865,22 @@ class DataFrame:
             ),
             **kwargs,
         )
+        if batch_size is None:
+            # If batch_size is not specified, return all data at once
+            return result
+        # If batch_size is specified, split the data into batches
+        # Splitting the result into batches of specified size
+        import pandas  # pragma: no cover
+        while True:
+            batch = []
+            for _ in range(batch_size):
+                try:
+                    batch.append(next(result))
+                except StopIteration:
+                    break
+            if not batch:
+                break
+            yield pandas.concat(batch)
 
     @df_api_usage
     def to_df(self, *names: Union[str, Iterable[str]]) -> "DataFrame":
